@@ -365,32 +365,13 @@ function App() {
 
   const referrerDetails = getReferrerDetails();
 
-  // Trigger contact save: Opens Contacts app directly on Android, downloads/opens vCard on iOS/Desktop
+  // Trigger contact save: Opens dialer app with prefilled phone number
   const handleSaveContactBack = () => {
     let formattedPhone = referrerDetails.phone;
     if (!formattedPhone.startsWith('+')) {
       formattedPhone = '+' + formattedPhone;
     }
-    
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (isAndroid) {
-      const nameEscaped = encodeURIComponent(referrerDetails.name);
-      const phoneEscaped = encodeURIComponent(formattedPhone);
-      // Added category=android.intent.category.BROWSABLE for browser security approval
-      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;category=android.intent.category.BROWSABLE;S.name=${nameEscaped};S.phone=${phoneEscaped};end`;
-      
-      const start = Date.now();
-      window.location.href = intentUrl;
-      
-      // Fallback in case in-app webview or custom browser blocks deep link intent launching
-      setTimeout(() => {
-        if (Date.now() - start < 2000) {
-          handleDownloadLeadVCard(referrerDetails.name, formattedPhone);
-        }
-      }, 1500);
-    } else {
-      handleDownloadLeadVCard(referrerDetails.name, formattedPhone);
-    }
+    window.location.href = `tel:${formattedPhone}`;
   };
 
   // Admin suspension controls
