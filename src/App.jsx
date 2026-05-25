@@ -36,6 +36,11 @@ function App() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Registration Country Selector States
+  const [regSelectedCountry, setRegSelectedCountry] = useState(defaultCountry);
+  const [isRegDropdownOpen, setIsRegDropdownOpen] = useState(false);
+  const [regSearchQuery, setRegSearchQuery] = useState('');
+  
   // Visitor Form States
   const [visitorName, setVisitorName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -65,6 +70,10 @@ function App() {
   const dropdownRef = useRef(null);
   const badgeRef = useRef(null);
   const [badgeWidth, setBadgeWidth] = useState(90);
+
+  const regDropdownRef = useRef(null);
+  const regBadgeRef = useRef(null);
+  const [regBadgeWidth, setRegBadgeWidth] = useState(90);
 
   // Load and sync database
   useEffect(() => {
@@ -156,6 +165,12 @@ function App() {
     }
   }, [selectedCountry, currentRoute]);
 
+  useEffect(() => {
+    if (regBadgeRef.current) {
+      setRegBadgeWidth(regBadgeRef.current.offsetWidth);
+    }
+  }, [regSelectedCountry, currentRoute]);
+
   // Geolocation lookup to auto-detect country of residence on load
   useEffect(() => {
     fetch('https://ipapi.co/json/')
@@ -168,6 +183,7 @@ function App() {
           const detected = countries.find(c => c.code === data.country_code.toUpperCase());
           if (detected) {
             setSelectedCountry(detected);
+            setRegSelectedCountry(detected);
           }
         }
       })
@@ -180,11 +196,19 @@ function App() {
     country.dial_code.includes(searchQuery)
   );
 
+  const filteredRegCountries = countries.filter(country =>
+    country.name.toLowerCase().includes(regSearchQuery.toLowerCase()) ||
+    country.dial_code.includes(regSearchQuery)
+  );
+
   // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
+      }
+      if (regDropdownRef.current && !regDropdownRef.current.contains(event.target)) {
+        setIsRegDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -205,15 +229,19 @@ function App() {
       cleanedPhone = cleanedPhone.substring(1);
     }
 
+    // Prepend selected country's dial code without the + sign
+    const dialWithoutPlus = regSelectedCountry.dial_code.replace('+', '');
+    const cleanFullPhone = `${dialWithoutPlus}${cleanedPhone}`;
+
     const existingUsers = JSON.parse(localStorage.getItem('contacts_users') || '[]');
-    if (existingUsers.some(u => u.phone === cleanedPhone)) {
+    if (existingUsers.some(u => u.phone === cleanFullPhone)) {
       setAuthError('An account with this phone number already exists.');
       return;
     }
 
     const newUser = {
       name: authName.trim(),
-      phone: cleanedPhone,
+      phone: cleanFullPhone,
       password: authPassword,
       status: 'active',
       timestamp: new Date().toLocaleString()
@@ -487,9 +515,82 @@ function App() {
             <input type="text" className="phone-field" style={{ paddingLeft: '1rem' }} placeholder="John Doe" value={authName} onChange={e => setAuthName(e.target.value)} required />
           </div>
 
+          {/* Registration Country Selector */}
+          <div className="form-group" ref={regDropdownRef}>
+            <label className="form-label">Country of Residence</label>
+            
+            <button 
+              type="button" 
+              className={`selector-trigger ${isRegDropdownOpen ? 'active' : ''}`}
+              onClick={() => setIsRegDropdownOpen(!isRegDropdownOpen)}
+            >
+              <div className="trigger-value">
+                <span className="country-flag">{regSelectedCountry.flag}</span>
+                <span>{regSelectedCountry.name}</span>
+              </div>
+              <ChevronDown size={18} style={{ transform: isRegDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+
+            {isRegDropdownOpen && (
+              <div className="dropdown-panel">
+                <div className="search-container">
+                  <Search size={18} className="search-icon" />
+                  <input 
+                    type="text" 
+                    className="search-input" 
+                    placeholder="Type country name..." 
+                    value={regSearchQuery}
+                    onChange={(e) => setRegSearchQuery(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="country-list">
+                  {filteredRegCountries.length === 0 ? (
+                    <div className="no-results">No countries found</div>
+                  ) : (
+                    filteredRegCountries.map(country => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        className="country-option"
+                        onClick={() => {
+                          setRegSelectedCountry(country);
+                          setIsRegDropdownOpen(false);
+                          setRegSearchQuery('');
+                        }}
+                      >
+                        <div className="country-option-info">
+                          <span className="country-flag">{country.flag}</span>
+                          <span>{country.name}</span>
+                        </div>
+                        <span className="country-dial">{country.dial_code}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Registration Phone Number */}
           <div className="form-group">
             <label className="form-label">WhatsApp Number</label>
-            <input type="tel" className="phone-field" style={{ paddingLeft: '1rem' }} placeholder="e.g. 254775499650" value={authPhone} onChange={e => setAuthPhone(e.target.value)} required />
+            <div className="phone-input-wrapper">
+              <div ref={regBadgeRef} className="phone-dial-badge">
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginRight: '1px', fontWeight: '600' }}>{regSelectedCountry.code}</span>
+                <span>{regSelectedCountry.dial_code}</span>
+              </div>
+              <input 
+                type="tel" 
+                className="phone-field" 
+                style={{ paddingLeft: `${regBadgeWidth + 24}px` }}
+                placeholder="e.g. 712345678" 
+                value={authPhone}
+                onChange={(e) => setAuthPhone(e.target.value.replace(/\D/g, ''))}
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
