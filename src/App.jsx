@@ -75,6 +75,46 @@ function App() {
   const regBadgeRef = useRef(null);
   const [regBadgeWidth, setRegBadgeWidth] = useState(90);
 
+  // Referrer Info details state
+  const [referrerInfo, setReferrerInfo] = useState({ name: 'Tonny', phone: '254775499650' });
+
+  const fetchLeads = async (userPhone = null) => {
+    try {
+      const url = userPhone ? `/api/leads?refUserPhone=${userPhone}` : '/api/leads';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setLeads(data);
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchReferrerDetails = async (refPhone) => {
+    try {
+      const res = await fetch(`/api/referrer?phone=${refPhone}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReferrerInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching referrer:', error);
+    }
+  };
+
   // Load and sync database
   useEffect(() => {
     // Sync hash changes
@@ -109,26 +149,12 @@ function App() {
     };
     window.addEventListener('hashchange', handleHashChange);
 
-    // Initial Database Setup (Mock local stores)
-    if (!localStorage.getItem('contacts_users')) {
-      // Default users
-      localStorage.setItem('contacts_users', JSON.stringify([
-        { name: "John Doe", phone: "254700000000", password: "123", status: "active", timestamp: new Date().toLocaleString() }
-      ]));
-    }
-    if (!localStorage.getItem('contacts_leads')) {
-      // Mock leads
-      localStorage.setItem('contacts_leads', JSON.stringify([]));
-    }
-
-    // Pull database states
-    setUsers(JSON.parse(localStorage.getItem('contacts_users') || '[]'));
-    setLeads(JSON.parse(localStorage.getItem('contacts_leads') || '[]'));
-
     // Pull active user session
     const storedUser = localStorage.getItem('contacts_current_user');
+    let loggedInUser = null;
     if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
+      loggedInUser = JSON.parse(storedUser);
+      setCurrentUser(loggedInUser);
     }
 
     // Check query ref parameters (e.g., ?ref=254775499650)
@@ -138,13 +164,13 @@ function App() {
 
     if (refParam) {
       setReferrer(refParam);
+      fetchReferrerDetails(refParam);
     } else {
-      const storedUserObj = JSON.parse(storedUser || 'null');
       if (hash === '#/' || hash === '') {
         window.location.hash = '#/login';
-      } else if (hash === '#/dashboard' && (!storedUserObj || storedUserObj.role !== 'user')) {
+      } else if (hash === '#/dashboard' && (!loggedInUser || loggedInUser.role !== 'user')) {
         window.location.hash = '#/login';
-      } else if (hash === '#/admin' && (!storedUserObj || storedUserObj.role !== 'admin')) {
+      } else if (hash === '#/admin' && (!loggedInUser || loggedInUser.role !== 'admin')) {
         window.location.hash = '#/login';
       }
     }
@@ -154,8 +180,15 @@ function App() {
 
   // Sync users & leads state dynamically whenever the hash changes
   useEffect(() => {
-    setUsers(JSON.parse(localStorage.getItem('contacts_users') || '[]'));
-    setLeads(JSON.parse(localStorage.getItem('contacts_leads') || '[]'));
+    const storedUser = JSON.parse(localStorage.getItem('contacts_current_user') || 'null');
+    if (storedUser) {
+      if (storedUser.role === 'admin') {
+        fetchUsers();
+        fetchLeads();
+      } else if (storedUser.role === 'user') {
+        fetchLeads(storedUser.phone);
+      }
+    }
   }, [currentRoute, isSaved]);
 
   // Adjust input padding dynamically
@@ -216,12 +249,15 @@ function App() {
   }, []);
 
   // Handle registration
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     if (!authName || !authPhone || !authPassword) {
       setAuthError('Please fill in all fields');
       return;
     }
+
+    setIsLoading(true);
+    setAuthError('');
 
     // Clean leading zero from phone numbers in registration
     let cleanedPhone = authPhone.trim().replace(/\D/g, '');
@@ -233,72 +269,79 @@ function App() {
     const dialWithoutPlus = regSelectedCountry.dial_code.replace('+', '');
     const cleanFullPhone = `${dialWithoutPlus}${cleanedPhone}`;
 
-    const existingUsers = JSON.parse(localStorage.getItem('contacts_users') || '[]');
-    if (existingUsers.some(u => u.phone === cleanFullPhone)) {
-      setAuthError('An account with this phone number already exists.');
-      return;
+    try {
+      const res = await fetch('/api/auth?action=register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: authName.trim(),
+          phone: cleanFullPhone,
+          password: authPassword
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Registration failed');
+      }
+
+      setIsRegSuccess(true);
+      setAuthError('');
+      setAuthName('');
+      setAuthPhone('');
+      setAuthPassword('');
+
+      // Automatically navigate to login page after successful registration
+      setTimeout(() => {
+        window.location.hash = '#/login';
+      }, 1500);
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setIsLoading(false);
     }
-
-    const newUser = {
-      name: authName.trim(),
-      phone: cleanFullPhone,
-      password: authPassword,
-      status: 'active',
-      timestamp: new Date().toLocaleString()
-    };
-
-    const updatedUsers = [...existingUsers, newUser];
-    localStorage.setItem('contacts_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
-
-    setIsRegSuccess(true);
-    setAuthError('');
-    setAuthName('');
-    setAuthPhone('');
-    setAuthPassword('');
-
-    // Automatically navigate to login page after successful registration
-    setTimeout(() => {
-      window.location.hash = '#/login';
-    }, 1500);
   };
 
   // Handle Login
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
+    setIsLoading(true);
 
     let cleanedPhone = authPhone.trim().replace(/\D/g, '');
     if (cleanedPhone.startsWith('0')) {
       cleanedPhone = cleanedPhone.substring(1);
     }
 
-    // Super Admin login check
-    if (cleanedPhone === '254775499650' && authPassword === 'admin123') {
-      const adminUser = { name: 'Super Admin', phone: '254775499650', role: 'admin' };
-      localStorage.setItem('contacts_current_user', JSON.stringify(adminUser));
-      setCurrentUser(adminUser);
-      window.location.hash = '#/admin';
-      return;
+    try {
+      const res = await fetch('/api/auth?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanedPhone,
+          password: authPassword
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Login failed');
+      }
+
+      const userSession = await res.json();
+      localStorage.setItem('contacts_current_user', JSON.stringify(userSession));
+      setCurrentUser(userSession);
+      
+      if (userSession.role === 'admin') {
+        window.location.hash = '#/admin';
+      } else {
+        window.location.hash = '#/dashboard';
+      }
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setIsLoading(false);
     }
-
-    const existingUsers = JSON.parse(localStorage.getItem('contacts_users') || '[]');
-    const matchedUser = existingUsers.find(u => u.phone === cleanedPhone && u.password === authPassword);
-
-    if (!matchedUser) {
-      setAuthError('Invalid credentials. Please try again.');
-      return;
-    }
-
-    if (matchedUser.status === 'suspended') {
-      setAuthError('Your downline dashboard has been suspended. Contact Super Admin Tonny.');
-      return;
-    }
-
-    const userSession = { ...matchedUser, role: 'user' };
-    localStorage.setItem('contacts_current_user', JSON.stringify(userSession));
-    setCurrentUser(userSession);
-    window.location.hash = '#/dashboard';
   };
 
   // Handle Logout
@@ -320,7 +363,7 @@ function App() {
   };
 
   // Visitor Form: Save lead
-  const handleSaveLead = (e) => {
+  const handleSaveLead = async (e) => {
     e.preventDefault();
     if (!visitorName.trim() || !phoneNumber.trim()) return;
 
@@ -335,27 +378,32 @@ function App() {
     const fullNumber = `${selectedCountry.dial_code}${cleanPhone}`;
     const formattedName = toSentenceCase(visitorName);
 
-    setTimeout(() => {
-      const newLead = {
-        id: Date.now(),
-        name: formattedName,
-        countryName: selectedCountry.name,
-        countryCode: selectedCountry.code,
-        dialCode: selectedCountry.dial_code,
-        rawNumber: cleanPhone,
-        fullNumber: fullNumber,
-        refUserPhone: referrer || '254775499650', // Default assignment is Super Admin Tonny
-        timestamp: new Date().toLocaleString()
-      };
+    try {
+      const res = await fetch('/api/leads?action=create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formattedName,
+          countryName: selectedCountry.name,
+          countryCode: selectedCountry.code,
+          dialCode: selectedCountry.dial_code,
+          rawNumber: cleanPhone,
+          fullNumber: fullNumber,
+          refUserPhone: referrer || '254775499650'
+        })
+      });
 
-      const existingLeads = JSON.parse(localStorage.getItem('contacts_leads') || '[]');
-      const updatedLeads = [newLead, ...existingLeads];
-      localStorage.setItem('contacts_leads', JSON.stringify(updatedLeads));
-      setLeads(updatedLeads);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to save contact information');
+      }
 
-      setIsLoading(false);
       setIsSaved(true);
-    }, 1200);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // vCard Generator for specific lead
@@ -381,18 +429,7 @@ function App() {
 
   // Get referrer details dynamically
   const getReferrerDetails = () => {
-    if (!referrer) {
-      return { name: 'Tonny', phone: '254775499650' };
-    }
-    let cleanRef = referrer.replace(/\D/g, '');
-    if (cleanRef.startsWith('0')) {
-      cleanRef = cleanRef.substring(1);
-    }
-    const matchedUser = users.find(u => u.phone === cleanRef || u.phone === `254${cleanRef}`);
-    if (matchedUser) {
-      return { name: matchedUser.name, phone: matchedUser.phone };
-    }
-    return { name: 'Tonny', phone: referrer };
+    return referrerInfo;
   };
 
   const referrerDetails = getReferrerDetails();
@@ -424,20 +461,27 @@ function App() {
   };
 
   // Admin suspension controls
-  const handleToggleUserStatus = (userPhone) => {
-    const existingUsers = JSON.parse(localStorage.getItem('contacts_users') || '[]');
-    const updatedUsers = existingUsers.map(u => {
-      if (u.phone === userPhone) {
-        return { ...u, status: u.status === 'active' ? 'suspended' : 'active' };
+  const handleToggleUserStatus = async (userPhone) => {
+    try {
+      const res = await fetch('/api/users?action=toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: userPhone })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to toggle status');
       }
-      return u;
-    });
-    localStorage.setItem('contacts_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
+
+      await fetchUsers();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   // Manual Referrer Creator inside Admin Panel
-  const handleCreateDownline = () => {
+  const handleCreateDownline = async () => {
     const nameInput = prompt("Enter Downline Team Member Name:");
     if (!nameInput) return;
     const phoneInput = prompt("Enter Downline Phone Number:");
@@ -448,23 +492,26 @@ function App() {
     let cleaned = phoneInput.replace(/\D/g, '');
     if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
 
-    const existingUsers = JSON.parse(localStorage.getItem('contacts_users') || '[]');
-    if (existingUsers.some(u => u.phone === cleaned)) {
-      alert("A user with this number already exists.");
-      return;
+    try {
+      const res = await fetch('/api/users?action=create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nameInput.trim(),
+          phone: cleaned,
+          password: passInput
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to create downline member');
+      }
+
+      await fetchUsers();
+    } catch (err) {
+      alert(err.message);
     }
-
-    const newUser = {
-      name: nameInput.trim(),
-      phone: cleaned,
-      password: passInput,
-      status: 'active',
-      timestamp: new Date().toLocaleString()
-    };
-
-    const updatedUsers = [...existingUsers, newUser];
-    localStorage.setItem('contacts_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
   };
 
   // Copy referral Link to Clipboard
@@ -506,10 +553,22 @@ function App() {
   };
 
   // Clear master database
-  const handleClearAllLeads = () => {
+  const handleClearAllLeads = async () => {
     if (window.confirm("Permanently wipe all leads from database? This cannot be undone.")) {
-      localStorage.setItem('contacts_leads', '[]');
-      setLeads([]);
+      try {
+        const res = await fetch('/api/leads?action=clear', {
+          method: 'DELETE'
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || 'Failed to clear leads');
+        }
+
+        setLeads([]);
+      } catch (err) {
+        alert(err.message);
+      }
     }
   };
 
