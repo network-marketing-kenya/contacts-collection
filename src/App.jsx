@@ -80,14 +80,16 @@ function App() {
         return;
       }
 
+      const storedUser = JSON.parse(localStorage.getItem('contacts_current_user') || 'null');
+
       // Protect dashboard route
-      if (hash === '#/dashboard' && (!currentUserRef.current || currentUserRef.current.role !== 'user')) {
+      if (hash === '#/dashboard' && (!storedUser || storedUser.role !== 'user')) {
         window.location.hash = '#/login';
         return;
       }
 
       // Protect admin route
-      if (hash === '#/admin' && (!currentUserRef.current || currentUserRef.current.role !== 'admin')) {
+      if (hash === '#/admin' && (!storedUser || storedUser.role !== 'admin')) {
         window.location.hash = '#/login';
         return;
       }
@@ -114,6 +116,12 @@ function App() {
     setUsers(JSON.parse(localStorage.getItem('contacts_users') || '[]'));
     setLeads(JSON.parse(localStorage.getItem('contacts_leads') || '[]'));
 
+    // Pull active user session
+    const storedUser = localStorage.getItem('contacts_current_user');
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
+    }
+
     // Check query ref parameters (e.g., ?ref=254775499650)
     const urlParams = new URLSearchParams(window.location.search);
     const refParam = urlParams.get('ref');
@@ -122,7 +130,12 @@ function App() {
     if (refParam) {
       setReferrer(refParam);
     } else {
-      if (hash === '#/' || hash === '' || hash === '#/dashboard' || hash === '#/admin') {
+      const storedUserObj = JSON.parse(storedUser || 'null');
+      if (hash === '#/' || hash === '') {
+        window.location.hash = '#/login';
+      } else if (hash === '#/dashboard' && (!storedUserObj || storedUserObj.role !== 'user')) {
+        window.location.hash = '#/login';
+      } else if (hash === '#/admin' && (!storedUserObj || storedUserObj.role !== 'admin')) {
         window.location.hash = '#/login';
       }
     }
@@ -215,6 +228,11 @@ function App() {
     setAuthName('');
     setAuthPhone('');
     setAuthPassword('');
+
+    // Automatically navigate to login page after successful registration
+    setTimeout(() => {
+      window.location.hash = '#/login';
+    }, 1500);
   };
 
   // Handle Login
@@ -229,7 +247,9 @@ function App() {
 
     // Super Admin login check
     if (cleanedPhone === '254775499650' && authPassword === 'admin123') {
-      setCurrentUser({ name: 'Super Admin', phone: '254775499650', role: 'admin' });
+      const adminUser = { name: 'Super Admin', phone: '254775499650', role: 'admin' };
+      localStorage.setItem('contacts_current_user', JSON.stringify(adminUser));
+      setCurrentUser(adminUser);
       window.location.hash = '#/admin';
       return;
     }
@@ -247,12 +267,15 @@ function App() {
       return;
     }
 
-    setCurrentUser({ ...matchedUser, role: 'user' });
+    const userSession = { ...matchedUser, role: 'user' };
+    localStorage.setItem('contacts_current_user', JSON.stringify(userSession));
+    setCurrentUser(userSession);
     window.location.hash = '#/dashboard';
   };
 
   // Handle Logout
   const handleLogout = () => {
+    localStorage.removeItem('contacts_current_user');
     setCurrentUser(null);
     window.location.hash = '#/login';
   };
@@ -353,8 +376,18 @@ function App() {
     if (isAndroid) {
       const nameEscaped = encodeURIComponent(referrerDetails.name);
       const phoneEscaped = encodeURIComponent(formattedPhone);
-      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;S.name=${nameEscaped};S.phone=${phoneEscaped};end`;
+      // Added category=android.intent.category.BROWSABLE for browser security approval
+      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;category=android.intent.category.BROWSABLE;S.name=${nameEscaped};S.phone=${phoneEscaped};end`;
+      
+      const start = Date.now();
       window.location.href = intentUrl;
+      
+      // Fallback in case in-app webview or custom browser blocks deep link intent launching
+      setTimeout(() => {
+        if (Date.now() - start < 2000) {
+          handleDownloadLeadVCard(referrerDetails.name, formattedPhone);
+        }
+      }, 1500);
     } else {
       handleDownloadLeadVCard(referrerDetails.name, formattedPhone);
     }
