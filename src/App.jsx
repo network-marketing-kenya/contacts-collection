@@ -392,6 +392,7 @@ function App() {
   };
 
   const referrerDetails = getReferrerDetails();
+  const referrerFirstName = referrerDetails.name ? referrerDetails.name.split(' ')[0] : 'Tonny';
 
   // Trigger contact save: Opens dialer app with prefilled phone number
   const handleSaveContactBack = () => {
@@ -584,12 +585,17 @@ function App() {
               <input 
                 type="tel" 
                 className="phone-field" 
-                style={{ paddingLeft: `${regBadgeWidth + 24}px` }}
+                style={{ paddingLeft: `${regBadgeWidth + 24}px`, paddingRight: '2.75rem' }}
                 placeholder="e.g. 712345678" 
                 value={authPhone}
                 onChange={(e) => setAuthPhone(e.target.value.replace(/\D/g, ''))}
                 required
               />
+              <div style={{ position: 'absolute', right: '1rem', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#25D366', fill: 'currentColor' }}>
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+              </div>
             </div>
           </div>
 
@@ -1000,12 +1006,17 @@ function App() {
                 <input 
                   type="tel" 
                   className="phone-field" 
-                  style={{ paddingLeft: `${badgeWidth + 24}px` }}
+                  style={{ paddingLeft: `${badgeWidth + 24}px`, paddingRight: '2.75rem' }}
                   placeholder="e.g. 712345678" 
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
                   required
                 />
+                <div style={{ position: 'absolute', right: '1rem', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#25D366', fill: 'currentColor' }}>
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </div>
               </div>
             </div>
 
@@ -1037,7 +1048,7 @@ function App() {
 
           <div className="save-back-card">
             <h3>Final Step: Save Our Contact</h3>
-            <p>Save <strong>{referrerDetails.name}</strong> to your contact list now so you don't miss our official follow-up message!</p>
+            <p>Save <strong>{referrerFirstName}</strong> to your contact list now so you don't miss our official follow-up message!</p>
             
             <button 
               type="button" 
@@ -1045,7 +1056,7 @@ function App() {
               onClick={handleSaveContactBack}
               style={{ background: 'linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-blue) 100%)', boxShadow: '0 8px 24px -4px rgba(20, 184, 166, 0.4)' }}
             >
-              <UserCheck size={20} /> Save {referrerDetails.name} (Contact)
+              <UserCheck size={20} /> Save {referrerFirstName} (Contact)
             </button>
           </div>
         </div>
