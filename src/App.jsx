@@ -384,7 +384,11 @@ function App() {
     if (!referrer) {
       return { name: 'Tonny', phone: '254775499650' };
     }
-    const matchedUser = users.find(u => u.phone === referrer);
+    let cleanRef = referrer.replace(/\D/g, '');
+    if (cleanRef.startsWith('0')) {
+      cleanRef = cleanRef.substring(1);
+    }
+    const matchedUser = users.find(u => u.phone === cleanRef || u.phone === `254${cleanRef}`);
     if (matchedUser) {
       return { name: matchedUser.name, phone: matchedUser.phone };
     }
@@ -394,12 +398,28 @@ function App() {
   const referrerDetails = getReferrerDetails();
   const referrerFirstName = referrerDetails.name ? referrerDetails.name.split(' ')[0] : 'Tonny';
 
+  // Format global phone number securely (prepending country dial code if missing)
+  const formatGlobalPhoneNumber = (phone) => {
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+    // Check if it already starts with a known country dial code
+    const startsWithCountryCode = countries.some(country => {
+      const code = country.dial_code.replace('+', '');
+      return cleaned.startsWith(code) && cleaned.length > code.length;
+    });
+    
+    if (startsWithCountryCode) {
+      return '+' + cleaned;
+    }
+    // Default fallback to Kenya (254) if no known country prefix is found
+    return '+254' + cleaned;
+  };
+
   // Trigger contact save: Opens dialer app with prefilled phone number
   const handleSaveContactBack = () => {
-    let formattedPhone = referrerDetails.phone;
-    if (!formattedPhone.startsWith('+')) {
-      formattedPhone = '+' + formattedPhone;
-    }
+    const formattedPhone = formatGlobalPhoneNumber(referrerDetails.phone);
     window.location.href = `tel:${formattedPhone}`;
   };
 
