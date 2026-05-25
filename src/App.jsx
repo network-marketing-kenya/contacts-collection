@@ -55,6 +55,12 @@ function App() {
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
 
+  // Refs for routing sync
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   // UI Refs
   const dropdownRef = useRef(null);
   const badgeRef = useRef(null);
@@ -64,7 +70,29 @@ function App() {
   useEffect(() => {
     // Sync hash changes
     const handleHashChange = () => {
-      setCurrentRoute(window.location.hash || '#/');
+      const hash = window.location.hash || '#/';
+      const urlParams = new URLSearchParams(window.location.search);
+      const refParam = urlParams.get('ref');
+      
+      // Redirect to login if visitor landing has no referrer
+      if (!refParam && (hash === '#/' || hash === '')) {
+        window.location.hash = '#/login';
+        return;
+      }
+
+      // Protect dashboard route
+      if (hash === '#/dashboard' && (!currentUserRef.current || currentUserRef.current.role !== 'user')) {
+        window.location.hash = '#/login';
+        return;
+      }
+
+      // Protect admin route
+      if (hash === '#/admin' && (!currentUserRef.current || currentUserRef.current.role !== 'admin')) {
+        window.location.hash = '#/login';
+        return;
+      }
+      
+      setCurrentRoute(hash);
       setAuthError('');
       setIsRegSuccess(false);
     };
@@ -89,8 +117,14 @@ function App() {
     // Check query ref parameters (e.g., ?ref=254775499650)
     const urlParams = new URLSearchParams(window.location.search);
     const refParam = urlParams.get('ref');
+    const hash = window.location.hash || '#/';
+
     if (refParam) {
       setReferrer(refParam);
+    } else {
+      if (hash === '#/' || hash === '' || hash === '#/dashboard' || hash === '#/admin') {
+        window.location.hash = '#/login';
+      }
     }
 
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -294,9 +328,36 @@ function App() {
     document.body.removeChild(link);
   };
 
-  // Trigger vCard download for "Save Tonny to contacts"
+  // Get referrer details dynamically
+  const getReferrerDetails = () => {
+    if (!referrer) {
+      return { name: 'Tonny', phone: '254775499650' };
+    }
+    const matchedUser = users.find(u => u.phone === referrer);
+    if (matchedUser) {
+      return { name: matchedUser.name, phone: matchedUser.phone };
+    }
+    return { name: 'Tonny', phone: referrer };
+  };
+
+  const referrerDetails = getReferrerDetails();
+
+  // Trigger contact save: Opens Contacts app directly on Android, downloads/opens vCard on iOS/Desktop
   const handleSaveContactBack = () => {
-    handleDownloadLeadVCard("Tonny", "+254775499650");
+    let formattedPhone = referrerDetails.phone;
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    }
+    
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid) {
+      const nameEscaped = encodeURIComponent(referrerDetails.name);
+      const phoneEscaped = encodeURIComponent(formattedPhone);
+      const intentUrl = `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact;S.name=${nameEscaped};S.phone=${phoneEscaped};end`;
+      window.location.href = intentUrl;
+    } else {
+      handleDownloadLeadVCard(referrerDetails.name, formattedPhone);
+    }
   };
 
   // Admin suspension controls
@@ -861,7 +922,7 @@ function App() {
 
           <div className="save-back-card">
             <h3>Final Step: Save Our Contact</h3>
-            <p>Save <strong>Tonny</strong> to your contact list now so you don't miss our official follow-up message!</p>
+            <p>Save <strong>{referrerDetails.name}</strong> to your contact list now so you don't miss our official follow-up message!</p>
             
             <button 
               type="button" 
@@ -869,7 +930,7 @@ function App() {
               onClick={handleSaveContactBack}
               style={{ background: 'linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-blue) 100%)', boxShadow: '0 8px 24px -4px rgba(20, 184, 166, 0.4)' }}
             >
-              <UserCheck size={20} /> Save Tonny (Contact)
+              <UserCheck size={20} /> Save {referrerDetails.name} (Contact)
             </button>
           </div>
         </div>
